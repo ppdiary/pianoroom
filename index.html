@@ -420,6 +420,23 @@
       padding: 4px 12px;
       border-radius: 20px;
     }
+
+    .lowkey-admin-btn {
+      background: transparent;
+      border: none;
+      color: var(--secondary-text);
+      opacity: 0.4;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .lowkey-admin-btn:hover {
+      opacity: 1;
+      background: var(--tag-bg);
+    }
   </style>
 </head>
 <body>
@@ -435,7 +452,7 @@
           <button class="view-btn active" id="btnGrid" onclick="setView('grid')">網格 ⊞</button>
           <button class="view-btn" id="btnList" onclick="setView('list')">列表 ☰</button>
         </div>
-        <button class="mode-btn" id="modeSwitchBtn" onclick="toggleMode()">⚙️ 後台管理</button>
+        <button class="lowkey-admin-btn" id="modeSwitchBtn" onclick="toggleMode()" title="後台管理">⚙️</button>
       </div>
     </header>
 
@@ -582,33 +599,61 @@
     let currentLightboxImages = [];
     let currentLightboxIndex = 0;
 
-    function toggleMode() {
-      isAdminMode = !isAdminMode;
-      const frontPanel = document.getElementById('frontPanel');
-      const adminPanel = document.getElementById('adminPanel');
-      const frontViewToggle = document.getElementById('frontViewToggle');
-      const modeSwitchBtn = document.getElementById('modeSwitchBtn');
+const ADMIN_HASH = "9fa4628fdc8ab3695975e06f53074c98571548e2ad8f2ed6f5208859f30e62da"; 
 
-      if (isAdminMode) {
-        document.body.classList.add('admin-mode');
-        frontPanel.style.display = 'none';
-        adminPanel.classList.add('active');
-        frontViewToggle.style.display = 'none';
-        modeSwitchBtn.innerText = '👁️ 切換前台';
-        document.getElementById('pageTitle').innerText = '⚙️ 琴房資料管理後台';
-        document.getElementById('pageSubtitle').innerText = '新增、編輯與即時統計看板';
-        renderAdmin();
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function toggleMode() {
+
+  if (!isAdminMode) {
+    const isPassed = sessionStorage.getItem("adminAuthorized") === "true";
+    
+    if (!isPassed) {
+      const input = prompt("🔐 請輸入管理員密碼：");
+      if (!input) return; 
+      
+      const inputHash = await sha256(input);
+      if (inputHash === ADMIN_HASH) {
+
+        sessionStorage.setItem("adminAuthorized", "true");
       } else {
-        document.body.classList.remove('admin-mode');
-        frontPanel.style.display = 'block';
-        adminPanel.classList.remove('active');
-        frontViewToggle.style.display = 'flex';
-        modeSwitchBtn.innerText = '⚙️ 後台管理';
-        document.getElementById('pageTitle').innerText = '🎹 全台琴房踩點地圖';
-        document.getElementById('pageSubtitle').innerText = '空間備註與每小時租費紀錄';
-        renderFront();
+        alert("密碼錯誤！無法進入管理後台。");
+        return; 
       }
     }
+  }
+
+
+  isAdminMode = !isAdminMode;
+  const frontPanel = document.getElementById('frontPanel');
+  const adminPanel = document.getElementById('adminPanel');
+  const frontViewToggle = document.getElementById('frontViewToggle');
+  const modeSwitchBtn = document.getElementById('modeSwitchBtn');
+
+  if (isAdminMode) {
+    document.body.classList.add('admin-mode');
+    frontPanel.style.display = 'none';
+    adminPanel.classList.add('active');
+    frontViewToggle.style.display = 'none';
+    modeSwitchBtn.innerText = '👁️ 切換前台';
+    document.getElementById('pageTitle').innerText = '⚙️ 琴房資料管理後台';
+    document.getElementById('pageSubtitle').innerText = '新增、編輯與即時統計看板';
+    renderAdmin();
+  } else {
+    document.body.classList.remove('admin-mode');
+    frontPanel.style.display = 'block';
+    adminPanel.classList.remove('active');
+    frontViewToggle.style.display = 'flex';
+    modeSwitchBtn.innerText = '⚙️ 後台管理';
+    document.getElementById('pageTitle').innerText = '🎹 全台琴房踩點地圖';
+    document.getElementById('pageSubtitle').innerText = '空間備註與每小時租費紀錄';
+    renderFront();
+  }
+}
 
     function handleImageUpload(event) {
       const files = event.target.files;
