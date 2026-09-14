@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全台琴房踩點地圖與管理後台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Kalam:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-front: #FFFFFF;
+      --bg-admin: #F9F7F2;
+      --primary-text: #3D3846;
+      --secondary-text: #7A7382;
+      --accent-purple: #8B7A9F;
+      --accent-purple-light: #F0EDF5;
+      --tag-bg: #F4F2EE;
+      --border-color: #EBE6DC;
+      --danger-color: #C86D6D;
+
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scrollbar-gutter: stable; }
+
+    body {
+      background-color: var(--bg-front);
+      color: var(--primary-text);
+      font-family: "Noto Sans TC", -apple-system, sans-serif;
+      margin: 0;
+      padding: 40px 24px;
+      transition: background-color 0.3s ease;
+    }
+
+    body.admin-mode { background-color: var(--bg-admin); }
+    .container { max-width: 1080px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 32px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-family: "Kalam", "Caveat", "Noto Sans TC", cursive, sans-serif;
+      font-size: 2.1rem;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      color: var(--primary-text);
+    }
+
+    .subtitle { color: var(--secondary-text); font-size: 0.88rem; }
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+
+    .mode-btn {
+      border: 1px solid var(--accent-purple);
+      background: #FFF;
+      color: var(--accent-purple);
+      padding: 6px 14px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .mode-btn:hover { background: var(--accent-purple); color: #FFF; }
+
+    .view-toggle {
+      display: flex;
+      gap: 4px;
+      background: #F4F2EE;
+      padding: 3px;
+      border-radius: var(--radius-md);
+    }
+
+    .view-btn {
+      border: none;
+      background: transparent;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: var(--secondary-text);
+      transition: all 0.2s;
+    }
+
+    .view-btn.active {
+      background: #FFF;
+      color: var(--primary-text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .filter-section { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 32px; }
+
+    .filter-btn {
+      border: 1px solid var(--border-color);
+      background: #FFF;
+      color: var(--secondary-text);
+      padding: 6px 16px;
+      font-size: 0.88rem;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--accent-purple-light);
+      color: var(--accent-purple);
+      border-color: var(--accent-purple-light);
+      font-weight: 500;
+    }
+
+    .studio-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 36px 24px;
+    }
+
+    .studio-card {
+      display: flex;
+      flex-direction: column;
+      background: transparent;
+    }
+
+    .card-photo-container {
+      position: relative;
+      height: 200px;
+      background-color: #F4F2EE;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .card-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+
+    .card-photo-container:hover .card-photo {
+      transform: scale(1.03);
+    }
+
+    .photo-overlay-notes {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(30, 26, 36, 0.88) 0%, rgba(30, 26, 36, 0.6) 80%, transparent 100%);
+      color: #FFF;
+      padding: 28px 14px 12px 14px;
+      font-size: 0.82rem;
+      line-height: 1.45;
+      transform: translateY(100%);
+      opacity: 0;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .card-photo-container:hover .photo-overlay-notes {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .carousel-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      color: var(--primary-text);
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 3;
+    }
+
+    .card-photo-container:hover .carousel-btn { opacity: 1; }
+    .carousel-btn.prev { left: 8px; }
+    .carousel-btn.next { right: 8px; }
+
+    .carousel-dots {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 4px;
+      z-index: 3;
+    }
+
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.5);
+      transition: all 0.2s;
+    }
+
+    .dot.active {
+      background: #FFF;
+      width: 14px;
+      border-radius: var(--radius-sm);
+    }
+
+    .card-body { padding: 12px 2px 0 2px; }
+
+    .card-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .card-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
+    .price { font-size: 0.9rem; color: var(--accent-purple); font-weight: 700; }
+    .location { font-size: 0.82rem; color: var(--secondary-text); margin-bottom: 8px; }
+    
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag { 
+      font-size: 0.73rem; 
+      padding: 2px 8px; 
+      background: var(--tag-bg); 
+      border-radius: var(--radius-sm); 
+      color: var(--secondary-text); 
+    }
+
+    .studio-list { display: flex; flex-direction: column; }
+    .list-item {
+      display: grid;
+      grid-template-columns: 80px 1.2fr 110px 180px 1.8fr;
+      align-items: center;
+      gap: 20px;
+      padding: 16px 4px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .list-thumb { 
+      width: 80px; height: 56px; 
+      border-radius: var(--radius-sm); 
+      object-fit: cover; 
+      cursor: pointer; 
+    }
+
+    .admin-panel { display: none; flex-direction: column; gap: 32px; }
+    .admin-panel.active { display: flex; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: #FFF;
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+    }
+
+    .stat-card .number {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent-purple);
+      margin-top: 4px;
+    }
+
+    .form-card {
+      background: #FFF;
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+    }
+
+    .form-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .form-title { font-size: 1.2rem; font-weight: 600; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full-width { grid-column: 1 / -1; }
+
+    label { font-size: 0.85rem; font-weight: 500; color: var(--secondary-text); }
+
+    input, select, textarea {
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      background: var(--bg-admin);
+      outline: none;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-purple);
+      background: #FFF;
+    }
+
+    .image-preview-container { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .preview-thumb {
+      width: 70px; height: 70px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      border: 1px solid var(--border-color);
+    }
+
+    .form-actions { display: flex; gap: 10px; }
+    .btn-submit {
+      background: var(--accent-purple);
+      color: #FFF;
+      border: none;
+      padding: 10px 24px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      color: var(--secondary-text);
+      border: 1px solid var(--border-color);
+      padding: 10px 18px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .admin-table-container {
+      background: #FFF;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      overflow-x: auto;
+    }
+
+    .admin-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+    .admin-table th, .admin-table td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+    .admin-table th { background: #FAF8F5; color: var(--secondary-text); font-weight: 500; }
+
+    .action-btn {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+    }
+
+    .action-btn.edit { color: var(--accent-purple); margin-right: 6px; }
+    .action-btn.delete { color: var(--danger-color); }
+
+    .lightbox {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(20, 18, 22, 0.92);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+    .lightbox.active { display: flex; }
+    .lightbox-img { max-width: 85%; max-height: 80vh; border-radius: var(--radius-md); object-fit: contain; }
+    .lightbox-close {
+      position: absolute; top: 20px; right: 24px;
+      color: #FFF; font-size: 2.2rem; cursor: pointer; opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+    .lightbox-close:hover { opacity: 1; }
+    
+    .lightbox-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.15);
+      color: #FFF;
+      border: none;
+      font-size: 1.8rem;
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .lightbox-btn:hover { background: rgba(255, 255, 255, 0.3); }
+    .lightbox-btn.prev { left: 20px; }
+    .lightbox-btn.next { right: 20px; }
+
+    .lightbox-counter {
+      position: absolute;
+      bottom: 20px;
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 0.9rem;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div>
+        <h1 id="pageTitle">🎹 全台琴房踩點地圖</h1>
+        <div class="subtitle" id="pageSubtitle">空間備註與每小時租費紀錄</div>
+      </div>
+      <div class="header-actions">
+        <div class="view-toggle" id="frontViewToggle">
+          <button class="view-btn active" id="btnGrid" onclick="setView('grid')">網格 ⊞</button>
+          <button class="view-btn" id="btnList" onclick="setView('list')">列表 ☰</button>
+        </div>
+        <button class="mode-btn" id="modeSwitchBtn" onclick="toggleMode()">⚙️ 後台管理</button>
+      </div>
+    </header>
+
+    <div id="frontPanel">
+      <div class="filter-section" id="cityFilters">
+        <button class="filter-btn active" onclick="filterCity('全部')">全部區域</button>
+        <button class="filter-btn" onclick="filterCity('台中')">台中</button>
+        <button class="filter-btn" onclick="filterCity('嘉義')">嘉義</button>
+        <button class="filter-btn" onclick="filterCity('新北')">新北</button>
+      </div>
+      <main id="mainContainer" class="studio-grid"></main>
+    </div>
+
+    <div id="adminPanel" class="admin-panel">
+      <div class="stats-row">
+        <div class="stat-card">
+          <label>收錄琴房數量</label>
+          <div class="number" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+          <label>涵蓋縣市</label>
+          <div class="number" id="statCities">0</div>
+        </div>
+        <div class="stat-card">
+          <label>平均每小時租費</label>
+          <div class="number" id="statAvgPrice">$0</div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-header">
+          <div class="form-title" id="formModeTitle">➕ 新增琴房紀錄</div>
+        </div>
+        <form id="studioForm" onsubmit="handleFormSubmit(event)">
+          <input type="hidden" id="editId" value="">
+          
+          <div class="form-grid">
+            <div class="form-group">
+              <label>琴房名稱 *</label>
+              <input type="text" id="inputTitle" required placeholder="例如：翔韻樂器行 201">
+            </div>
+            <div class="form-group">
+              <label>縣市 *</label>
+              <select id="inputCity" required>
+                <option value="台中">台中</option>
+                <option value="嘉義">嘉義</option>
+                <option value="新北">新北</option>
+                <option value="澎湖">澎湖</option>
+                <option value="台北">台北</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>地址</label>
+              <input type="text" id="inputAddress" placeholder="例如：台中市太平區東平路558號">
+            </div>
+            <div class="form-group">
+              <label>初訪日 (僅後台紀錄)</label>
+              <input type="date" id="inputVisitDate">
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>鋼琴品牌 *</label>
+              <select id="inputBrand" required>
+                <option value="YAMAHA">YAMAHA</option>
+                <option value="KAWAI">KAWAI</option>
+                <option value="ALEX. STEINBACH">ALEX. STEINBACH</option>
+                <option value="STEINWAY & SONS">STEINWAY & SONS</option>
+                <option value="BÖSENDORFER">BÖSENDORFER</option>
+                <option value="KAWAI 32鍵">KAWAI 32鍵 (迷你琴)</option>
+                <option value="其他品牌">其他品牌</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>鋼琴類型 *</label>
+              <select id="inputType" required>
+                <option value="直立鋼琴">直立鋼琴</option>
+                <option value="平台鋼琴">平台鋼琴</option>
+                <option value="電鋼琴">電鋼琴</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>每小時價格 (NT$)</label>
+              <input type="number" id="inputPrice" placeholder="0 表示免費/低消">
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label>琴房照片上傳 (可多選)</label>
+              <input type="file" id="inputImageFiles" accept="image/*" multiple onchange="handleImageUpload(event)">
+              <div class="image-preview-container" id="previewContainer"></div>
+            </div>
+            <div class="form-group full-width">
+              <label>備註心得</label>
+              <textarea id="inputNotes" rows="3" placeholder="觸鍵質感、音色描述、聲學環境..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-submit" id="btnSubmit">新增琴房</button>
+            <button type="button" class="btn-cancel" id="btnCancel" style="display:none;" onclick="resetForm()">取消編輯</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="admin-table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>名稱</th>
+              <th>區域</th>
+              <th>初訪日</th>
+              <th>品牌 / 類型</th>
+              <th>價格/hr</th>
+              <th>備註</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="adminTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <span class="lightbox-close" onclick="closeLightbox(event)">&times;</span>
+    <button class="lightbox-btn prev" id="lightboxPrev" onclick="shiftLightboxPhoto(-1, event)">❮</button>
+    <img src="" class="lightbox-img" id="lightboxImg" onclick="event.stopPropagation()">
+    <button class="lightbox-btn next" id="lightboxNext" onclick="shiftLightboxPhoto(1, event)">❯</button>
+    <div class="lightbox-counter" id="lightboxCounter"></div>
+  </div>
+
+  <!-- UI 邏輯控制腳本 -->
+  <script>
+    let studiosData = [];
+    let currentUploadedImages = [];
+    let carouselIndexes = {};
+    let isAdminMode = false;
+    let currentCity = '全部';
+    let currentView = 'grid';
+
+    let currentLightboxImages = [];
+    let currentLightboxIndex = 0;
+
+    function toggleMode() {
+      isAdminMode = !isAdminMode;
+      const frontPanel = document.getElementById('frontPanel');
+      const adminPanel = document.getElementById('adminPanel');
+      const frontViewToggle = document.getElementById('frontViewToggle');
+      const modeSwitchBtn = document.getElementById('modeSwitchBtn');
+
+      if (isAdminMode) {
+        document.body.classList.add('admin-mode');
+        frontPanel.style.display = 'none';
+        adminPanel.classList.add('active');
+        frontViewToggle.style.display = 'none';
+        modeSwitchBtn.innerText = '👁️ 切換前台';
+        document.getElementById('pageTitle').innerText = '⚙️ 琴房資料管理後台';
+        document.getElementById('pageSubtitle').innerText = '新增、編輯與即時統計看板';
+        renderAdmin();
+      } else {
+        document.body.classList.remove('admin-mode');
+        frontPanel.style.display = 'block';
+        adminPanel.classList.remove('active');
+        frontViewToggle.style.display = 'flex';
+        modeSwitchBtn.innerText = '⚙️ 後台管理';
+        document.getElementById('pageTitle').innerText = '🎹 全台琴房踩點地圖';
+        document.getElementById('pageSubtitle').innerText = '空間備註與每小時租費紀錄';
+        renderFront();
+      }
+    }
+
+    function handleImageUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          currentUploadedImages.push(e.target.result);
+          renderImagePreviews();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function renderImagePreviews() {
+      const container = document.getElementById('previewContainer');
+      container.innerHTML = currentUploadedImages.map(imgSrc => `
+        <img src="${imgSrc}" class="preview-thumb">
+      `).join('');
+    }
+
+    function changePhoto(studioId, step, event) {
+      if (event) event.stopPropagation();
+      const studio = studiosData.find(s => s.id === studioId);
+      if (!studio || !studio.images || studio.images.length <= 1) return;
+
+      let currentIndex = carouselIndexes[studioId] || 0;
+      let newIndex = (currentIndex + step + studio.images.length) % studio.images.length;
+      carouselIndexes[studioId] = newIndex;
+
+      const imgElem = document.getElementById(`card-img-${studioId}`);
+      if (imgElem) imgElem.src = studio.images[newIndex];
+
+      const dotsElem = document.getElementById(`dots-${studioId}`);
+      if (dotsElem) {
+        dotsElem.innerHTML = studio.images.map((_, idx) => `
+          <div class="dot ${idx === newIndex ? 'active' : ''}"></div>
+        `).join('');
+      }
+    }
+
+    function openLightbox(imagesArr, startIndex = 0) {
+      if (!imagesArr || imagesArr.length === 0) return;
+      currentLightboxImages = imagesArr;
+      currentLightboxIndex = startIndex;
+      
+      updateLightboxDisplay();
+      document.getElementById('lightbox').classList.add('active');
+      document.addEventListener('keydown', handleLightboxKeydown);
+    }
+
+    function updateLightboxDisplay() {
+      const imgElem = document.getElementById('lightboxImg');
+      const counterElem = document.getElementById('lightboxCounter');
+      const prevBtn = document.getElementById('lightboxPrev');
+      const nextBtn = document.getElementById('lightboxNext');
+
+      imgElem.src = currentLightboxImages[currentLightboxIndex];
+
+      if (currentLightboxImages.length > 1) {
+        prevBtn.style.display = 'flex';
+        nextBtn.style.display = 'flex';
+        counterElem.style.display = 'block';
+        counterElem.innerText = `${currentLightboxIndex + 1} / ${currentLightboxImages.length}`;
+      } else {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        counterElem.style.display = 'none';
+      }
+    }
+
+    function shiftLightboxPhoto(step, event) {
+      if (event) event.stopPropagation();
+      if (currentLightboxImages.length <= 1) return;
+
+      currentLightboxIndex = (currentLightboxIndex + step + currentLightboxImages.length) % currentLightboxImages.length;
+      updateLightboxDisplay();
+    }
+
+    function closeLightbox(event) {
+      if (event) event.stopPropagation();
+      document.getElementById('lightbox').classList.remove('active');
+      document.removeEventListener('keydown', handleLightboxKeydown);
+    }
+
+    function handleLightboxKeydown(e) {
+      if (e.key === 'ArrowLeft') shiftLightboxPhoto(-1);
+      if (e.key === 'ArrowRight') shiftLightboxPhoto(1);
+      if (e.key === 'Escape') closeLightbox();
+    }
+
+    function renderFront() {
+      const container = document.getElementById('mainContainer');
+      const filtered = studiosData.filter(item => currentCity === '全部' || item.city === currentCity);
+
+      if (currentView === 'grid') {
+        container.className = 'studio-grid';
+        container.innerHTML = filtered.map(item => {
+          const imgs = item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800'];
+          const currentIndex = carouselIndexes[item.id] || 0;
+          const hasMultiple = imgs.length > 1;
+          const jsonImgs = JSON.stringify(imgs).replace(/"/g, '&quot;');
+
+          return `
+            <div class="studio-card">
+              <div class="card-photo-container" onclick="openLightbox(${jsonImgs}, carouselIndexes['${item.id}'] || 0)">
+                <img id="card-img-${item.id}" src="${imgs[currentIndex]}" class="card-photo">
+                
+                ${item.notes ? `<div class="photo-overlay-notes">📝 ${item.notes}</div>` : ''}
+
+                ${hasMultiple ? `
+                  <button class="carousel-btn prev" onclick="changePhoto('${item.id}', -1, event)">❮</button>
+                  <button class="carousel-btn next" onclick="changePhoto('${item.id}', 1, event)">❯</button>
+                  <div class="carousel-dots" id="dots-${item.id}">
+                    ${imgs.map((_, idx) => `<div class="dot ${idx === currentIndex ? 'active' : ''}"></div>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="card-body">
+                <div class="card-title-row">
+                  <h3 class="card-title">${item.title}</h3>
+                  <span class="price">${item.price > 0 ? `NT$ ${item.price}/hr` : '免費/低消'}</span>
+                </div>
+                <div class="location">📍 ${item.address || item.city}</div>
+                <div class="tags">
+                  <span class="tag">${item.brand}</span>
+                  <span class="tag">${item.type}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        container.className = 'studio-list';
+        container.innerHTML = filtered.map(item => {
+          const imgs = item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800'];
+          const jsonImgs = JSON.stringify(imgs).replace(/"/g, '&quot;');
+          return `
+            <div class="list-item">
+              <img src="${imgs[0]}" class="list-thumb" onclick="openLightbox(${jsonImgs}, 0)">
+              <div><strong>${item.title}</strong><br><small style="color:var(--secondary-text)">📍 ${item.address || item.city}</small></div>
+              <div class="price">${item.price > 0 ? `NT$ ${item.price}/hr` : '免費/低消'}</div>
+              <div class="tags"><span class="tag">${item.brand}</span> <span class="tag">${item.type}</span></div>
+              <div style="font-size:0.85rem; color:var(--secondary-text);">${item.notes || '無備註'}</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function renderAdmin() {
+      document.getElementById('statTotal').innerText = studiosData.length;
+      const cities = new Set(studiosData.map(s => s.city));
+      document.getElementById('statCities').innerText = cities.size;
+      const avg = studiosData.length ? Math.round(studiosData.reduce((acc, cur) => acc + (cur.price || 0), 0) / studiosData.length) : 0;
+      document.getElementById('statAvgPrice').innerText = `$${avg}`;
+
+      const tbody = document.getElementById('adminTableBody');
+      tbody.innerHTML = studiosData.map(item => `
+        <tr>
+          <td><strong>${item.title}</strong></td>
+          <td>${item.city}</td>
+          <td>${item.visitDate || '-'}</td>
+          <td>${item.brand} / ${item.type}</td>
+          <td>${item.price > 0 ? `$${item.price}` : '免費/低消'}</td>
+          <td style="max-width: 200px; color: var(--secondary-text);">${item.notes || '-'}</td>
+          <td>
+            <button class="action-btn edit" onclick="editStudio('${item.id}')">編輯</button>
+            <button class="action-btn delete" onclick="deleteStudio('${item.id}')">刪除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      const editId = document.getElementById('editId').value;
+
+      const studioPayload = {
+        title: document.getElementById('inputTitle').value,
+        city: document.getElementById('inputCity').value,
+        address: document.getElementById('inputAddress').value,
+        visitDate: document.getElementById('inputVisitDate').value,
+        brand: document.getElementById('inputBrand').value,
+        type: document.getElementById('inputType').value,
+        price: Number(document.getElementById('inputPrice').value) || 0,
+        notes: document.getElementById('inputNotes').value,
+        images: currentUploadedImages.length > 0 ? currentUploadedImages : ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800']
+      };
+
+      if (window.saveStudioToCloud) {
+        await window.saveStudioToCloud(studioPayload, editId);
+      }
+      resetForm();
+    }
+
+    function editStudio(id) {
+      const target = studiosData.find(s => s.id === id);
+      if (!target) return;
+
+      document.getElementById('editId').value = target.id;
+      document.getElementById('inputTitle').value = target.title;
+      document.getElementById('inputCity').value = target.city;
+      document.getElementById('inputAddress').value = target.address || '';
+      document.getElementById('inputVisitDate').value = target.visitDate || '';
+      document.getElementById('inputBrand').value = target.brand;
+      document.getElementById('inputType').value = target.type;
+      document.getElementById('inputPrice').value = target.price || 0;
+      document.getElementById('inputNotes').value = target.notes || '';
+
+      currentUploadedImages = target.images || [];
+      renderImagePreviews();
+
+      document.getElementById('formModeTitle').innerText = '✏️ 編輯琴房紀錄';
+      document.getElementById('btnSubmit').innerText = '儲存修改';
+      document.getElementById('btnCancel').style.display = 'inline-block';
+
+      document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetForm() {
+      document.getElementById('studioForm').reset();
+      document.getElementById('editId').value = '';
+      currentUploadedImages = [];
+      renderImagePreviews();
+
+      document.getElementById('formModeTitle').innerText = '➕ 新增琴房紀錄';
+      document.getElementById('btnSubmit').innerText = '新增琴房';
+      document.getElementById('btnCancel').style.display = 'none';
+    }
+
+    async function deleteStudio(id) {
+      if (confirm('確定要刪除這間琴房紀錄嗎？')) {
+        if (window.deleteStudioFromCloud) {
+          await window.deleteStudioFromCloud(id);
+        }
+      }
+    }
+
+    function setView(view) {
+      currentView = view;
+      document.getElementById('btnGrid').classList.toggle('active', view === 'grid');
+      document.getElementById('btnList').classList.toggle('active', view === 'list');
+      renderFront();
+    }
+
+    function filterCity(city) {
+      currentCity = city;
+      document.querySelectorAll('#cityFilters .filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.innerText.includes(city));
+      });
+      renderFront();
+    }
+  </script>
+
+  <!-- Firebase 雲端資料庫 SDK 與介面整合 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+      getFirestore, 
+      collection, 
+      addDoc, 
+      updateDoc, 
+      deleteDoc, 
+      doc, 
+      onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // 👈 貼上你在 Firebase 後台取得的 firebaseConfig
+    const firebaseConfig = {
+      apiKey: "AIzaSyCE0xa4sDbvfDOE8waEVgy2JsudeObmwVk",
+      authDomain: "pianoroom-b98f2.firebaseapp.com",
+       projectId: "pianoroom-b98f2",
+       storageBucket: "pianoroom-b98f2.firebasestorage.app",
+       messagingSenderId: "439902881748",
+       appId: "1:439902881748:web:794656b6aa27aac7913841"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const studiosCollection = collection(db, "studios");
+
+    // 實時監聽：任何裝置新增/修訂，所有開啟網頁的裝置都會自動同步
+    onSnapshot(studiosCollection, (snapshot) => {
+      studiosData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      if (isAdminMode) renderAdmin();
+      else renderFront();
+    });
+
+    window.saveStudioToCloud = async function(studioData, editId) {
+      try {
+        if (editId) {
+          const docRef = doc(db, "studios", editId);
+          await updateDoc(docRef, studioData);
+        } else {
+          await addDoc(studiosCollection, studioData);
+        }
+      } catch (error) {
+        console.error("雲端儲存失敗：", error);
+        alert("儲存失敗，請確認 Firebase 設定！");
+      }
+    };
+
+    window.deleteStudioFromCloud = async function(id) {
+      try {
+        const docRef = doc(db, "studios", id);
+        await deleteDoc(docRef);
+      } catch (error) {
+        console.error("刪除失敗：", error);
+      }
+    };
+  </script>
+</body>
+</html>
