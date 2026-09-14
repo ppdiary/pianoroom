@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>全台琴房踩點地圖與管理後台</title>
+  <title>跟著鋼琴去旅行</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Kalam:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   
+  <!-- 引入 SheetJS 用於 Excel 匯入與匯出 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.min.js"></script>
+
   <style>
     :root {
       --bg-front: #FFFFFF;
@@ -230,6 +233,7 @@
 
     .card-title { font-size: 1.05rem; font-weight: 600; margin: 0; }
     .price { font-size: 0.9rem; color: var(--accent-purple); font-weight: 700; }
+    .min-spend-tag { font-size: 0.75rem; color: var(--secondary-text); font-weight: normal; margin-left: 2px; }
     .location { font-size: 0.82rem; color: var(--secondary-text); margin-bottom: 8px; }
     
     .tags { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -244,7 +248,7 @@
     .studio-list { display: flex; flex-direction: column; }
     .list-item {
       display: grid;
-      grid-template-columns: 80px 1.2fr 110px 180px 1.8fr;
+      grid-template-columns: 80px 1.5fr 110px 160px 1.8fr;
       align-items: center;
       gap: 20px;
       padding: 16px 4px;
@@ -435,7 +439,14 @@
 
     .lowkey-admin-btn:hover {
       opacity: 1;
-      background: var(--tag-bg);
+    }
+
+    /* Excel 管理區塊樣式 */
+    .excel-card {
+      background: #FFF;
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--accent-purple);
     }
   </style>
 </head>
@@ -444,25 +455,21 @@
   <div class="container">
     <header>
       <div>
-        <h1 id="pageTitle">🎹 全台琴房踩點地圖</h1>
-        <div class="subtitle" id="pageSubtitle">空間備註與每小時租費紀錄</div>
+        <h1 id="pageTitle">🎹 跟著鋼琴去旅行</h1>
+        <div class="subtitle" id="pageSubtitle">記錄我去過的琴房，以及彈過的琴。</div>
       </div>
       <div class="header-actions">
         <div class="view-toggle" id="frontViewToggle">
-          <button class="view-btn active" id="btnGrid" onclick="setView('grid')">網格 ⊞</button>
-          <button class="view-btn" id="btnList" onclick="setView('list')">列表 ☰</button>
+          <button class="view-btn active" id="btnGrid" onclick="setView('grid')">圖片 ⊞</button>
+          <button class="view-btn" id="btnList" onclick="setView('list')">清單 ☰</button>
         </div>
         <button class="lowkey-admin-btn" id="modeSwitchBtn" onclick="toggleMode()" title="後台管理">⚙️</button>
       </div>
     </header>
 
     <div id="frontPanel">
-      <div class="filter-section" id="cityFilters">
-        <button class="filter-btn active" onclick="filterCity('全部')">全部區域</button>
-        <button class="filter-btn" onclick="filterCity('台中')">台中</button>
-        <button class="filter-btn" onclick="filterCity('嘉義')">嘉義</button>
-        <button class="filter-btn" onclick="filterCity('新北')">新北</button>
-      </div>
+      <!-- 區域篩選標籤 (會由 JS 自動抓取現有區域填入) -->
+      <div class="filter-section" id="cityFilters"></div>
       <main id="mainContainer" class="studio-grid"></main>
     </div>
 
@@ -491,17 +498,18 @@
           
           <div class="form-grid">
             <div class="form-group">
-              <label>琴房名稱 *</label>
+              <label>地點名稱 *</label>
               <input type="text" id="inputTitle" required placeholder="例如：翔韻樂器行 201">
             </div>
             <div class="form-group">
-              <label>縣市 *</label>
+              <label>區域 *</label>
               <select id="inputCity" required>
                 <option value="台中">台中</option>
                 <option value="嘉義">嘉義</option>
                 <option value="新北">新北</option>
                 <option value="澎湖">澎湖</option>
                 <option value="台北">台北</option>
+                <option value="台東">台東</option>
               </select>
             </div>
             <div class="form-group">
@@ -520,10 +528,10 @@
               <select id="inputBrand" required>
                 <option value="YAMAHA">YAMAHA</option>
                 <option value="KAWAI">KAWAI</option>
-                <option value="ALEX. STEINBACH">ALEX. STEINBACH</option>
                 <option value="STEINWAY & SONS">STEINWAY & SONS</option>
                 <option value="BÖSENDORFER">BÖSENDORFER</option>
-                <option value="KAWAI 32鍵">KAWAI 32鍵 (迷你琴)</option>
+                <option value="FAZIOLI">FAZIOLI</option>
+                <option value="ALEX. STEINBACH">ALEX. STEINBACH</option>
                 <option value="其他品牌">其他品牌</option>
               </select>
             </div>
@@ -531,25 +539,32 @@
               <label>鋼琴類型 *</label>
               <select id="inputType" required>
                 <option value="直立鋼琴">直立鋼琴</option>
-                <option value="平台鋼琴">平台鋼琴</option>
+                <option value="三角鋼琴">三角鋼琴</option>
                 <option value="電鋼琴">電鋼琴</option>
               </select>
             </div>
             <div class="form-group">
               <label>每小時價格 (NT$)</label>
-              <input type="number" id="inputPrice" placeholder="0 表示免費/低消">
+              <input type="number" id="inputPrice" oninput="checkMinSpendState()" placeholder="0 表示免費，若有低消請勾選">
+            </div>
+            <!-- 「有低消」勾選欄位 -->
+            <div class="form-group" style="justify-content: flex-end; padding-bottom: 8px;">
+              <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; color: var(--primary-text);">
+                <input type="checkbox" id="inputHasMinSpend" style="width: 16px; height: 16px; cursor: pointer;" />
+                <span>有低消</span>
+              </label>
             </div>
           </div>
 
           <div class="form-grid">
             <div class="form-group full-width">
-              <label>琴房照片上傳 (可多選)</label>
+              <label>上傳琴房照片 (可多選)</label>
               <input type="file" id="inputImageFiles" accept="image/*" multiple onchange="handleImageUpload(event)">
               <div class="image-preview-container" id="previewContainer"></div>
             </div>
             <div class="form-group full-width">
-              <label>備註心得</label>
-              <textarea id="inputNotes" rows="3" placeholder="觸鍵質感、音色描述、聲學環境..."></textarea>
+              <label>備註</label>
+              <textarea id="inputNotes" rows="3" placeholder="心得、觸鍵質感、音色描述、空間環境..."></textarea>
             </div>
           </div>
 
@@ -560,6 +575,22 @@
         </form>
       </div>
 
+      <!-- Excel 管理區塊樣式 -->
+      <div class="excel-card">
+        <h3 style="margin: 0 0 12px 0; font-size: 1.05rem; color: var(--primary-text);">📊 Excel 資料批次管理</h3>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px;">
+          <button type="button" onclick="exportToExcel()" class="mode-btn" style="background: var(--accent-purple); color: #FFF;">📥 匯出資料備份 (.xlsx)</button>
+        </div>
+        <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 12px 0;" />
+        <p style="font-size: 0.82rem; color: var(--secondary-text); margin: 0 0 8px 0;">
+          批次匯入：請選擇 Excel 檔案，第一列標題需包含：<code>title</code>, <code>city</code>, <code>address</code>, <code>visitDate</code>, <code>brand</code>, <code>type</code>, <code>price</code>, <code>hasMinSpend</code>, <code>notes</code>
+        </p>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" />
+          <button type="button" onclick="uploadExcelData()" class="mode-btn">🚀 開始批次匯入</button>
+        </div>
+      </div>
+
       <div class="admin-table-container">
         <table class="admin-table">
           <thead>
@@ -568,7 +599,8 @@
               <th>區域</th>
               <th>初訪日</th>
               <th>品牌 / 類型</th>
-              <th>價格/hr</th>
+              <th>每小時價格</th>
+              <th>低消</th>
               <th>備註</th>
               <th>操作</th>
             </tr>
@@ -587,7 +619,8 @@
     <div class="lightbox-counter" id="lightboxCounter"></div>
   </div>
 
-  <!-- UI 邏輯控制腳本 -->
+
+ <!-- UI 邏輯控制腳本 -->
   <script>
     let studiosData = [];
     let currentUploadedImages = [];
@@ -599,78 +632,123 @@
     let currentLightboxImages = [];
     let currentLightboxIndex = 0;
 
-const ADMIN_HASH = "9fa4628fdc8ab3695975e06f53074c98571548e2ad8f2ed6f5208859f30e62da"; 
+    const ADMIN_HASH = "9fa4628fdc8ab3695975e06f53074c98571548e2ad8f2ed6f5208859f30e62da"; 
 
+    async function sha256(str) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
 
-async function sha256(str) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
+    async function toggleMode() {
+      if (!isAdminMode) {
+        const isPassed = sessionStorage.getItem("adminAuthorized") === "true";
+        if (!isPassed) {
+          const input = prompt("🔐 請輸入管理員密碼：");
+          if (!input) return; 
+          
+          const inputHash = await sha256(input);
+          if (inputHash === ADMIN_HASH) {
+            sessionStorage.setItem("adminAuthorized", "true");
+          } else {
+            alert("密碼錯誤！無法進入管理後台。");
+            return; 
+          }
+        }
+      }
 
-async function toggleMode() {
+      isAdminMode = !isAdminMode;
+      const frontPanel = document.getElementById('frontPanel');
+      const adminPanel = document.getElementById('adminPanel');
+      const frontViewToggle = document.getElementById('frontViewToggle');
+      const modeSwitchBtn = document.getElementById('modeSwitchBtn');
 
-  if (!isAdminMode) {
-    const isPassed = sessionStorage.getItem("adminAuthorized") === "true";
-    
-    if (!isPassed) {
-      const input = prompt("🔐 請輸入管理員密碼：");
-      if (!input) return; 
-      
-      const inputHash = await sha256(input);
-      if (inputHash === ADMIN_HASH) {
-
-        sessionStorage.setItem("adminAuthorized", "true");
+      if (isAdminMode) {
+        document.body.classList.add('admin-mode');
+        frontPanel.style.display = 'none';
+        adminPanel.classList.add('active');
+        frontViewToggle.style.display = 'none';
+        modeSwitchBtn.innerText = '🔙 回前台';
+        document.getElementById('pageTitle').innerText = '⚙️ 資料管理後台';
+        document.getElementById('pageSubtitle').innerText = '可新增、編輯、刪除琴房紀錄與批次匯入/匯出 Excel。';
+        renderAdmin();
       } else {
-        alert("密碼錯誤！無法進入管理後台。");
-        return; 
+        document.body.classList.remove('admin-mode');
+        frontPanel.style.display = 'block';
+        adminPanel.classList.remove('active');
+        frontViewToggle.style.display = 'flex';
+        modeSwitchBtn.innerText = '⚙️';
+        document.getElementById('pageTitle').innerText = '🎹 跟著鋼琴去旅行';
+        document.getElementById('pageSubtitle').innerText = '記錄我去過的琴房，以及彈過的琴。';
+        renderFront();
       }
     }
-  }
+  
+  // 防呆：控制「有低消」只有在價格為 0 時才可勾選
+    function checkMinSpendState() {
+      const priceInput = document.getElementById('inputPrice');
+      const minSpendCheckbox = document.getElementById('inputHasMinSpend');
+      if (!priceInput || !minSpendCheckbox) return;
 
+      const priceVal = Number(priceInput.value) || 0;
+      if (priceVal > 0) {
+        minSpendCheckbox.checked = false;
+        minSpendCheckbox.disabled = true;
+      } else {
+        minSpendCheckbox.disabled = false;
+      }
+    }
 
-  isAdminMode = !isAdminMode;
-  const frontPanel = document.getElementById('frontPanel');
-  const adminPanel = document.getElementById('adminPanel');
-  const frontViewToggle = document.getElementById('frontViewToggle');
-  const modeSwitchBtn = document.getElementById('modeSwitchBtn');
-
-  if (isAdminMode) {
-    document.body.classList.add('admin-mode');
-    frontPanel.style.display = 'none';
-    adminPanel.classList.add('active');
-    frontViewToggle.style.display = 'none';
-    modeSwitchBtn.innerText = '👁️ 切換前台';
-    document.getElementById('pageTitle').innerText = '⚙️ 琴房資料管理後台';
-    document.getElementById('pageSubtitle').innerText = '新增、編輯與即時統計看板';
-    renderAdmin();
-  } else {
-    document.body.classList.remove('admin-mode');
-    frontPanel.style.display = 'block';
-    adminPanel.classList.remove('active');
-    frontViewToggle.style.display = 'flex';
-    modeSwitchBtn.innerText = '⚙️ 後台管理';
-    document.getElementById('pageTitle').innerText = '🎹 全台琴房踩點地圖';
-    document.getElementById('pageSubtitle').innerText = '空間備註與每小時租費紀錄';
-    renderFront();
-  }
-}
-
-    function handleImageUpload(event) {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
-
-      Array.from(files).forEach(file => {
+    // 壓縮圖片
+    function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.7) {
+      return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = function(e) {
-          currentUploadedImages.push(e.target.result);
-          renderImagePreviews();
+          const img = new Image();
+          img.onload = function() {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedDataUrl);
+          };
+          img.src = e.target.result;
         };
         reader.readAsDataURL(file);
       });
     }
 
+    async function handleImageUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      for (const file of Array.from(files)) {
+        const compressedBase64 = await compressImage(file);
+        currentUploadedImages.push(compressedBase64);
+      }
+      renderImagePreviews();
+    }
+
     function renderImagePreviews() {
       const container = document.getElementById('previewContainer');
+      if (!container) return;
       container.innerHTML = currentUploadedImages.map(imgSrc => `
         <img src="${imgSrc}" class="preview-thumb">
       `).join('');
@@ -746,8 +824,23 @@ async function toggleMode() {
       if (e.key === 'Escape') closeLightbox();
     }
 
+    // 動態生成城市篩選標籤
+    function renderCityFilters() {
+      const filterContainer = document.getElementById('cityFilters');
+      if (!filterContainer) return;
+
+      const cities = ['全部', ...new Set(studiosData.map(s => s.city).filter(Boolean))];
+      filterContainer.innerHTML = cities.map(city => `
+        <button class="filter-btn ${currentCity === city ? 'active' : ''}" onclick="filterCity('${city}')">
+          ${city}
+        </button>
+      `).join('');
+    }
+
     function renderFront() {
+      renderCityFilters();
       const container = document.getElementById('mainContainer');
+      if (!container) return;
       const filtered = studiosData.filter(item => currentCity === '全部' || item.city === currentCity);
 
       if (currentView === 'grid') {
@@ -757,13 +850,14 @@ async function toggleMode() {
           const currentIndex = carouselIndexes[item.id] || 0;
           const hasMultiple = imgs.length > 1;
           const jsonImgs = JSON.stringify(imgs).replace(/"/g, '&quot;');
+          const minSpendBadge = item.hasMinSpend ? '<span class="min-spend-tag">（有低消）</span>' : '';
 
           return `
             <div class="studio-card">
               <div class="card-photo-container" onclick="openLightbox(${jsonImgs}, carouselIndexes['${item.id}'] || 0)">
                 <img id="card-img-${item.id}" src="${imgs[currentIndex]}" class="card-photo">
                 
-                ${item.notes ? `<div class="photo-overlay-notes">📝 ${item.notes}</div>` : ''}
+                ${item.notes ? `<div class="photo-overlay-notes"> ${item.notes}</div>` : ''}
 
                 ${hasMultiple ? `
                   <button class="carousel-btn prev" onclick="changePhoto('${item.id}', -1, event)">❮</button>
@@ -776,7 +870,7 @@ async function toggleMode() {
               <div class="card-body">
                 <div class="card-title-row">
                   <h3 class="card-title">${item.title}</h3>
-                  <span class="price">${item.price > 0 ? `NT$ ${item.price}/hr` : '免費/低消'}</span>
+                  <span class="price">${item.price > 0 ? `NT$ ${item.price} /hr` : '免費'}${minSpendBadge}</span>
                 </div>
                 <div class="location">📍 ${item.address || item.city}</div>
                 <div class="tags">
@@ -792,13 +886,15 @@ async function toggleMode() {
         container.innerHTML = filtered.map(item => {
           const imgs = item.images && item.images.length > 0 ? item.images : ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800'];
           const jsonImgs = JSON.stringify(imgs).replace(/"/g, '&quot;');
+          const minSpendBadge = item.hasMinSpend ? '<span class="min-spend-tag">（有低消）</span>' : '';
+
           return `
             <div class="list-item">
               <img src="${imgs[0]}" class="list-thumb" onclick="openLightbox(${jsonImgs}, 0)">
               <div><strong>${item.title}</strong><br><small style="color:var(--secondary-text)">📍 ${item.address || item.city}</small></div>
-              <div class="price">${item.price > 0 ? `NT$ ${item.price}/hr` : '免費/低消'}</div>
+              <div class="price">${item.price > 0 ? `NT$ ${item.price} /hr` : '免費'}${minSpendBadge}</div>
               <div class="tags"><span class="tag">${item.brand}</span> <span class="tag">${item.type}</span></div>
-              <div style="font-size:0.85rem; color:var(--secondary-text);">${item.notes || '無備註'}</div>
+              <div style="font-size:0.85rem; color:var(--secondary-text);">${item.notes || '無'}</div>
             </div>
           `;
         }).join('');
@@ -806,20 +902,28 @@ async function toggleMode() {
     }
 
     function renderAdmin() {
-      document.getElementById('statTotal').innerText = studiosData.length;
+      const statTotal = document.getElementById('statTotal');
+      if (statTotal) statTotal.innerText = studiosData.length;
+
       const cities = new Set(studiosData.map(s => s.city));
-      document.getElementById('statCities').innerText = cities.size;
+      const statCities = document.getElementById('statCities');
+      if (statCities) statCities.innerText = cities.size;
+
       const avg = studiosData.length ? Math.round(studiosData.reduce((acc, cur) => acc + (cur.price || 0), 0) / studiosData.length) : 0;
-      document.getElementById('statAvgPrice').innerText = `$${avg}`;
+      const statAvgPrice = document.getElementById('statAvgPrice');
+      if (statAvgPrice) statAvgPrice.innerText = `$${avg}`;
 
       const tbody = document.getElementById('adminTableBody');
+      if (!tbody) return;
+
       tbody.innerHTML = studiosData.map(item => `
         <tr>
           <td><strong>${item.title}</strong></td>
           <td>${item.city}</td>
           <td>${item.visitDate || '-'}</td>
           <td>${item.brand} / ${item.type}</td>
-          <td>${item.price > 0 ? `$${item.price}` : '免費/低消'}</td>
+          <td>${item.price > 0 ? `$${item.price}` : '免費'}</td>
+          <td>${item.hasMinSpend ? '⚠️ 是' : '否'}</td>
           <td style="max-width: 200px; color: var(--secondary-text);">${item.notes || '-'}</td>
           <td>
             <button class="action-btn edit" onclick="editStudio('${item.id}')">編輯</button>
@@ -841,6 +945,7 @@ async function toggleMode() {
         brand: document.getElementById('inputBrand').value,
         type: document.getElementById('inputType').value,
         price: Number(document.getElementById('inputPrice').value) || 0,
+        hasMinSpend: document.getElementById('inputHasMinSpend').checked,
         notes: document.getElementById('inputNotes').value,
         images: currentUploadedImages.length > 0 ? currentUploadedImages : ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800']
       };
@@ -863,6 +968,7 @@ async function toggleMode() {
       document.getElementById('inputBrand').value = target.brand;
       document.getElementById('inputType').value = target.type;
       document.getElementById('inputPrice').value = target.price || 0;
+      document.getElementById('inputHasMinSpend').checked = !!target.hasMinSpend;
       document.getElementById('inputNotes').value = target.notes || '';
 
       currentUploadedImages = target.images || [];
@@ -876,8 +982,11 @@ async function toggleMode() {
     }
 
     function resetForm() {
-      document.getElementById('studioForm').reset();
+      const form = document.getElementById('studioForm');
+      if (form) form.reset();
+
       document.getElementById('editId').value = '';
+      document.getElementById('inputHasMinSpend').checked = false;
       currentUploadedImages = [];
       renderImagePreviews();
 
@@ -908,6 +1017,100 @@ async function toggleMode() {
       });
       renderFront();
     }
+
+    // --- Excel 匯出與匯入邏輯 ---
+    function exportToExcel() {
+      if (!studiosData || studiosData.length === 0) {
+        alert("目前沒有任何資料可供匯出！");
+        return;
+      }
+
+      const excelRows = studiosData.map(item => ({
+        "ID": item.id,
+        "title": item.title || "",
+        "city": item.city || "",
+        "address": item.address || "",
+        "visitDate": item.visitDate || "",
+        "brand": item.brand || "",
+        "type": item.type || "",
+        "price": item.price || 0,
+        "hasMinSpend": item.hasMinSpend ? "是" : "否",
+        "notes": item.notes || "",
+        "images": (item.images || []).join(";")
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "琴房紀錄");
+
+      const today = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `跟著鋼琴去旅行_琴房紀錄備份_${today}.xlsx`);
+    }
+
+    function uploadExcelData() {
+      const fileInput = document.getElementById('excelFileInput');
+      const file = fileInput ? fileInput.files[0] : null;
+
+      if (!file) {
+        alert("請選擇要匯入的 Excel 或 CSV 檔案！");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+          if (!jsonData || jsonData.length === 0) {
+            alert("Excel 檔案內找不到有效的列資料！");
+            return;
+          }
+
+          if (!confirm(`找到 ${jsonData.length} 筆資料，確定要批次匯入到雲端嗎？`)) return;
+
+          let count = 0;
+          for (const row of jsonData) {
+            const hasMinSpendVal = String(row.hasMinSpend || '').trim().toLowerCase();
+            const hasMinSpendBool = hasMinSpendVal === 'true' || hasMinSpendVal === '是' || hasMinSpendVal === '1';
+
+            let imagesArr = ['https://images.unsplash.com/photo-1514119412350-e174d90d280e?w=800'];
+            if (row.images) {
+              imagesArr = String(row.images).split(';').map(url => url.trim()).filter(Boolean);
+            }
+
+            const studioPayload = {
+              title: row.title || '未命名琴房',
+              city: row.city || '台中',
+              address: row.address || '',
+              visitDate: row.visitDate || '',
+              brand: row.brand || 'YAMAHA',
+              type: row.type || '直立鋼琴',
+              price: Number(row.price) || 0,
+              hasMinSpend: hasMinSpendBool,
+              notes: row.notes || '',
+              images: imagesArr
+            };
+
+            if (window.saveStudioToCloud) {
+              await window.saveStudioToCloud(studioPayload, null);
+              count++;
+            }
+          }
+
+          alert(`成功匯入 ${count} 筆琴房紀錄！`);
+          fileInput.value = '';
+        } catch (err) {
+          console.error("Excel 解析或匯入失敗：", err);
+          alert("Excel 檔案解析失敗，請確認檔案格式是否正確。");
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
   </script>
 
   <!-- Firebase 雲端資料庫 SDK 與介面整合 -->
@@ -920,24 +1123,23 @@ async function toggleMode() {
       updateDoc, 
       deleteDoc, 
       doc, 
+      writeBatch,
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 👈 貼上你在 Firebase 後台取得的 firebaseConfig
     const firebaseConfig = {
       apiKey: "AIzaSyCE0xa4sDbvfDOE8waEVgy2JsudeObmwVk",
       authDomain: "pianoroom-b98f2.firebaseapp.com",
-       projectId: "pianoroom-b98f2",
-       storageBucket: "pianoroom-b98f2.firebasestorage.app",
-       messagingSenderId: "439902881748",
-       appId: "1:439902881748:web:794656b6aa27aac7913841"
+      projectId: "pianoroom-b98f2",
+      storageBucket: "pianoroom-b98f2.firebasestorage.app",
+      messagingSenderId: "439902881748",
+      appId: "1:439902881748:web:794656b6aa27aac7913841"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const studiosCollection = collection(db, "studios");
 
-    // 實時監聽：任何裝置新增/修訂，所有開啟網頁的裝置都會自動同步
     onSnapshot(studiosCollection, (snapshot) => {
       studiosData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -958,7 +1160,7 @@ async function toggleMode() {
         }
       } catch (error) {
         console.error("雲端儲存失敗：", error);
-        alert("儲存失敗，請確認 Firebase 設定！");
+        alert("儲存失敗，請確認 Firebase 設定或照片大小！");
       }
     };
 
